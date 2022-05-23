@@ -1,0 +1,107 @@
+.tasks {
+    @apply flex flex-col flex-nowrap;
+
+    counter-reset: task;
+    --steps-spacing: 8px;
+    --steps-radius: 12px;
+}
+
+.tasks .task {
+    @apply grid gap-1 justify-start;
+
+    grid-template-columns: auto 1fr;
+    grid-template-rows: 1fr;
+
+    --step-dot-color: hsl(var(--n));
+    --step-bar-top-color: hsl(var(--n));
+    --step-bar-bottom-color: hsl(var(--b3));
+    --step-bar-top-height: calc(var(--steps-radius) + var(--steps-spacing));
+}
+
+.tasks .task > *:first-of-type {
+    padding-top: var(--steps-spacing);
+}
+
+.tasks .task > *:last-of-type {
+    padding-bottom: var(--steps-spacing);
+}
+
+.tasks .task:after {
+    content: "";
+    background-color: var(--step-dot-color);
+    color: hsl(var(--nc));
+    margin: var(--steps-spacing);
+    z-index: 1;
+    font-size: var(--steps-radius);
+
+    height: calc(var(--steps-radius) * 2);
+    width: calc(var(--steps-radius) * 2);
+
+    @apply relative col-start-1 row-start-1 row-span-full place-self-start rounded-circle grid place-items-center;
+}
+
+.tasks .task:before {
+    content: "";
+    @apply h-full w-1 col-start-1 row-start-1 row-span-full top-0 overflow-hidden;
+
+    background: linear-gradient(
+            var(--step-bar-top-color) 0%,
+            var(--step-bar-top-color) var(--step-bar-top-height),
+            var(--step-dot-color) calc(var(--step-bar-top-height) + var(--steps-radius) * 0.9),
+            var(--step-bar-bottom-color) 100%);
+    color: hsl(var(--nc));
+
+    transform: translateX(-50%);
+    margin-left: 50%;
+}
+
+.tasks .task:first-of-type::before {
+    --step-bar-top-color: transparent !important;
+}
+
+.tasks .task:last-of-type::before {
+    background: linear-gradient(
+            var(--step-bar-top-color) 0%,
+            var(--step-bar-top-color) var(--step-bar-top-height),
+            transparent calc(var(--step-bar-top-height) + var(--steps-radius) * 0.9),
+            transparent 100%);
+}
+
+.tasks > .task:not([data-status]) {
+    --step-bar-top-color: hsl(var(--b3));
+    --step-dot-color: hsl(var(--b3));
+}
+
+.tasks > .task.loading:last-of-type {
+    --step-bar-bottom-color: hsl(var(--b3));
+}
+
+.tasks > .task[data-status="finish"]:last-of-type { content: "★"; }
+
+.tasks > .task[data-status="loading"]:first-of-type,
+.tasks > .task[data-status="success"] ~ .task[data-status="loading"]
+{
+    --step-bar-bottom-color: hsl(var(--b3));
+}
+
+.tasks > .task[data-status="success"] ~ .task[data-status="error"]::before
+{
+    background: linear-gradient(
+            var(--step-bar-top-color) 0%,
+            var(--step-bar-top-color) var(--step-bar-top-height),
+            hsl(var(--b3)) calc(var(--step-bar-top-height) + var(--steps-radius) * 0.9),
+            hsl(var(--b3)) 100%);
+}
+
+.tasks > .task[data-status] {
+    --step-bar-bottom-color: hsl(var(--n));
+}
+
+.tasks > .task[data-status="success"]::after { content: "✓"; }
+.tasks > .task[data-status="error"]::after { content: "✕"; }
+.tasks > .task[data-status="finish"]::after { content: "★"; }
+
+.tasks > .task:not([data-status]) {
+    @apply font-light;
+    color: hsl(var(--b3));
+}
