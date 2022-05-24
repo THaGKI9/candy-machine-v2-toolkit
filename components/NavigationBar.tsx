@@ -60,7 +60,7 @@ export const NavigationBar = () => {
       <select id="current-page" className="ml-4 select select-ghost" onChange={onToolkitChanged}>
         <option value=".">Home</option>
         {FEATURES.map((s, idx) => (
-          <option key={idx} value={s.link}>
+          <option key={idx} value={"." + s.link}>
             {s.name}
           </option>
         ))}
