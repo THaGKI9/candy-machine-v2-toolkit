@@ -103,11 +103,6 @@
     animation: spin 2s linear infinite;
 }
 
-@keyframes task-loading-dual-ring {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
 .tasks > .task:not([data-status]) {
     @apply font-light;
     color: hsl(var(--b3));

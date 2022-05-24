@@ -11,6 +11,9 @@ function getAssetPrefix() {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    optimizeCss: true,
+  },
   reactStrictMode: true,
   assetPrefix: getAssetPrefix(),
   webpack(config) {
