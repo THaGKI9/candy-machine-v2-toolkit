@@ -18,7 +18,7 @@ const Home: NextPage = () => {
         <div className="grid place-items-center">
           <div className="pt-12 w-fit px-auto grid grid-cols-[repeat(3,20rem)] gap-6">
             {FEATURES.map((s, idx) => (
-              <a key={idx} className="card bg-base-100 shadow-md border-zinc-100 border" href={s.link} target="_blank" rel="noreferrer">
+              <a key={idx} className="card bg-base-100 shadow-md border-zinc-100 border" href={"." + s.link} target="_blank" rel="noreferrer">
                 <div className="card-body">
                   <h2 className="card-title">{s.name}</h2>
                   <p className="text-zinc-400">{s.link}</p>
