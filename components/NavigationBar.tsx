@@ -10,9 +10,9 @@ import { FEATURES } from "./constant";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faToolbox } from "@fortawesome/free-solid-svg-icons";
 
-export const NavigationBar = () => {
+export const NavigationBar = (props: { currentPage?: string }) => {
   const wallet = useAnchorWallet();
-  const { notify, settings, setSettings } = useContext(AppContext);
+  const { notify, settings } = useContext(AppContext);
   const connection = useMemo(() => new Connection(settings.rpcUrl), [settings]);
   const [requesting, setRequesting] = useState(false);
 
@@ -47,20 +47,18 @@ export const NavigationBar = () => {
     });
   };
 
-  useEffect(() => {
-    (document.getElementById("current-page") as HTMLSelectElement).value = "." + window.location.pathname;
-  }, []);
-
   return (
     <nav className="px-8 py-2 flex flex-row flex-nowrap gap-4 w-full items-center text-slate-100 bg-slate-800">
       <h1 className="text-2xl">
         <FontAwesomeIcon className="pr-[1ch]" icon={faToolbox} />
         Candy Machine V2 Toolkit
       </h1>
-      <select id="current-page" className="ml-4 select select-ghost" onChange={onToolkitChanged}>
-        <option value="./">Home</option>
+      <select className="ml-4 select select-ghost" onChange={onToolkitChanged}>
+        <option value="./" selected={props.currentPage === "/"}>
+          Home
+        </option>
         {FEATURES.map((s, idx) => (
-          <option key={idx} value={"." + s.link}>
+          <option key={idx} value={"." + s.link} selected={props.currentPage === s.link}>
             {s.name}
           </option>
         ))}

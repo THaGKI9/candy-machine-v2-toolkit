@@ -12,7 +12,7 @@ const Home: NextPage = () => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="keywords" content="NFT, Solana, Ape, Golden, Copyright" />
       </Head>
-      <Layout>
+      <Layout currentPage="/">
         <h1 className="text-6xl text-center">Features</h1>
 
         <div className="grid place-items-center">

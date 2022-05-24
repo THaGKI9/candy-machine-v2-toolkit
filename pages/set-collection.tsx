@@ -24,7 +24,7 @@ const SetCollectionPage: NextPage = () => {
       <Head>
         <title>Set Collection - Candy Machine V2 Toolkit</title>
       </Head>
-      <Layout>
+      <Layout currentPage="/set-collection">
         <SetCollectionLayout
           id="step-1-create-collection"
           title="Step 1. Create collection metadata NFT"
