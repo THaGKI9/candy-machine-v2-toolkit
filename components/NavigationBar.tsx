@@ -54,7 +54,8 @@ export const NavigationBar = () => {
   return (
     <nav className="px-8 py-2 flex flex-row flex-nowrap gap-4 w-full items-center text-slate-100 bg-slate-800">
       <h1 className="text-2xl">
-        <FontAwesomeIcon className="pr-[1ch]" icon={faToolbox} />Candy Machine V2 Toolkit
+        <FontAwesomeIcon className="pr-[1ch]" icon={faToolbox} />
+        Candy Machine V2 Toolkit
       </h1>
       <select id="current-page" className="ml-4 select select-ghost" onChange={onToolkitChanged}>
         <option value="/">Home</option>
