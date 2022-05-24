@@ -1,4 +1,5 @@
 import "../styles/globals.css";
+import "@fortawesome/fontawesome-svg-core/styles.css";
 
 import type { AppProps } from "next/app";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
@@ -10,8 +11,10 @@ import { PhantomWalletAdapter, TorusWalletAdapter } from "@solana/wallet-adapter
 import { clusterApiUrl } from "@solana/web3.js";
 import Notify from "bnc-notify";
 import useLocalStorageState from "use-local-storage-state";
-
+import { config } from "@fortawesome/fontawesome-svg-core";
 import { AppContext, DEFAULT_SETTINGS } from "../components/AppContext";
+
+config.autoAddCss = false;
 
 function MyApp({ Component, pageProps }: AppProps) {
   const [notify, setNotify] = useState<ReturnType<typeof Notify>>();
