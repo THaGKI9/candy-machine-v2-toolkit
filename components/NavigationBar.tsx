@@ -48,7 +48,7 @@ export const NavigationBar = () => {
   };
 
   useEffect(() => {
-    (document.getElementById("current-page") as HTMLSelectElement).value = window.location.pathname;
+    (document.getElementById("current-page") as HTMLSelectElement).value = "." + window.location.pathname;
   }, []);
 
   return (
@@ -58,7 +58,7 @@ export const NavigationBar = () => {
         Candy Machine V2 Toolkit
       </h1>
       <select id="current-page" className="ml-4 select select-ghost" onChange={onToolkitChanged}>
-        <option value=".">Home</option>
+        <option value="./">Home</option>
         {FEATURES.map((s, idx) => (
           <option key={idx} value={"." + s.link}>
             {s.name}
