@@ -1,4 +1,5 @@
 import "../styles/globals.css";
+
 import type { AppProps } from "next/app";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
@@ -7,10 +8,10 @@ import { SlopeWalletAdapter } from "@solana/wallet-adapter-slope";
 import { useEffect, useMemo, useState } from "react";
 import { PhantomWalletAdapter, TorusWalletAdapter } from "@solana/wallet-adapter-wallets";
 import { clusterApiUrl } from "@solana/web3.js";
-import { AppContext } from "../components/appContext";
-import { DEFAULT_SETTINGS } from "../components/settingModal";
 import Notify from "bnc-notify";
 import useLocalStorageState from "use-local-storage-state";
+
+import { AppContext, DEFAULT_SETTINGS } from "../components/AppContext";
 
 function MyApp({ Component, pageProps }: AppProps) {
   const [notify, setNotify] = useState<ReturnType<typeof Notify>>();
@@ -18,13 +19,7 @@ function MyApp({ Component, pageProps }: AppProps) {
   const wallets = useMemo(() => [new PhantomWalletAdapter(), new GlowWalletAdapter(), new SlopeWalletAdapter(), new TorusWalletAdapter()], []);
   const endpoint = useMemo(() => clusterApiUrl("mainnet-beta"), []);
 
-  useEffect(() => {
-    setNotify(
-      Notify({
-        desktopPosition: "topLeft",
-      }),
-    );
-  }, []);
+  useEffect(() => setNotify(Notify({ desktopPosition: "topLeft" })), []);
 
   return (
     <AppContext.Provider value={{ settings, setSettings, notify }}>

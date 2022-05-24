@@ -1,18 +1,6 @@
-import { ChangeEventHandler, createRef, MouseEventHandler, useContext } from "react";
-import { Cluster, clusterApiUrl } from "@solana/web3.js";
-import { AppContext } from "./appContext";
-
-export interface Settings {
-  cluster: Cluster;
-  rpcUrl: string;
-}
-
-const DEFAULT_CLUSTER = "mainnet-beta";
-
-export const DEFAULT_SETTINGS: Settings = {
-  cluster: DEFAULT_CLUSTER,
-  rpcUrl: clusterApiUrl(DEFAULT_CLUSTER),
-};
+import { ChangeEventHandler, useContext } from "react";
+import { Cluster } from "@solana/web3.js";
+import { AppContext } from "./AppContext";
 
 export const SettingModal = () => {
   const { settings, setSettings } = useContext(AppContext);

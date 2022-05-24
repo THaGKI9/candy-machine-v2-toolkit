@@ -1,13 +1,9 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { useContext, useState } from "react";
-import { TaskStatus, StatusIndicator, Task } from "../taskStatus";
 import { createCreateMasterEditionV3Instruction, createCreateMetadataAccountV2Instruction } from "@metaplex-foundation/mpl-token-metadata";
-import { readFileAsDataUrl } from "../../utils/file";
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
-import { URLPolyfill } from "../../utils/urlPolyfill";
 import { NFTStorageMetaplexor, prepareMetaplexNFT } from "@nftstorage/metaplex-auth";
-import { getEditionPDA, getMetadataPDA } from "../../utils/mpl/token";
 import {
   createAssociatedTokenAccountInstruction,
   createInitializeMintInstruction,
@@ -16,35 +12,37 @@ import {
   MintLayout,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { getBrowserLinkByAddress, getBrowserLinkByTxId, waitForTransactionConfirmation } from "../../utils/solana";
-import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
-import { AppContext } from "../appContext";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { getBrowserLinkByAddress, getBrowserLinkByTxId, isValidPublicKey, waitForTransactionConfirmation } from "../../utils/solana";
+import { AppContext } from "../AppContext";
+import { getEditionPDA, getMetadataPDA } from "../../utils/mpl";
+import { URLPolyfill } from "../../utils/urlPolyfill";
+import { readFileAsDataUrl } from "../../utils/file";
+import { Task, TaskStatus } from "../TaskStatus";
 
 export interface CreateCollectionSectionProps {
-  id: string;
   connection: Connection;
   onCreated: (collectionTokenPublicKey: PublicKey) => void;
 }
 
 export default function CreateCollectionSection(props: CreateCollectionSectionProps) {
-  const { connection, id, onCreated } = props;
+  const { connection, onCreated } = props;
   const { settings } = useContext(AppContext);
-  const wallet = useAnchorWallet();
-  const web3Wallet = useWallet();
+  const wallet = useWallet();
 
   const [taskPackMetadata, setTaskPackMetadata] = useState<Task>();
-  const [taskSignAndUpload, setTaskSignAndUpload] = useState<Task & { metadataURI?: string }>();
+  const [taskSignAndUpload, setTaskSignAndUpload] = useState<Task & { metadataUri?: string; metadataIpfsUri?: string }>();
   const [taskSignForMintingTx, setTaskSignForMintingTx] = useState<Task & { collectionNFTLink?: string }>();
   const [taskWaitingTx, setTaskWaitingTx] = useState<Task & { txLink?: string }>();
-  const [taskFinishCreating, setTaskFinishCreating] = useState<Task>();
+  const [taskFinish, setTaskFinish] = useState<Task>();
+  const [executing, setExecuting] = useState(false);
 
-  const [creatingCollection, setCreatingCollection] = useState(false);
   const resetCreateCollectionStates = () => {
     setTaskPackMetadata({});
     setTaskSignAndUpload({});
     setTaskSignForMintingTx({});
     setTaskWaitingTx({});
-    setTaskFinishCreating({});
+    setTaskFinish({});
   };
 
   const [iconFile, setIconFile] = useState<{ dataURL: string; mimeType: string }>();
@@ -119,7 +117,7 @@ export default function CreateCollectionSection(props: CreateCollectionSectionPr
     if (shares.reduce((prev, curr) => prev + curr, 0) !== 100) return { error: "Shares doesn't add up to 100" };
 
     const creatorAddresses = [wallet?.publicKey?.toBase58() ?? "", ...creators.map(({ address }) => address)];
-    const invalidCreatorIndex = creatorAddresses.findIndex((addr) => !PublicKey.isOnCurve(addr));
+    const invalidCreatorIndex = creatorAddresses.findIndex((addr) => !isValidPublicKey(addr));
     if (invalidCreatorIndex !== -1) return { error: `Invalid address for Creator ${invalidCreatorIndex + 1}` };
 
     const blob = await (await fetch(iconFile!.dataURL)).blob();
@@ -139,10 +137,10 @@ export default function CreateCollectionSection(props: CreateCollectionSectionPr
   };
 
   const createCollectionToken = () => {
-    const userPubKey = wallet!.publicKey;
+    const userPubKey = wallet!.publicKey!;
 
     resetCreateCollectionStates();
-    setCreatingCollection(true);
+    setExecuting(true);
     setTaskPackMetadata({ status: TaskStatus.Loading });
 
     (async () => {
@@ -157,7 +155,7 @@ export default function CreateCollectionSection(props: CreateCollectionSectionPr
       }
 
       setTaskPackMetadata({ status: TaskStatus.Success });
-      setTaskSignAndUpload({ status: TaskStatus.Loading, metadataURI: "" });
+      setTaskSignAndUpload({ status: TaskStatus.Loading });
 
       const rawMetadata = {
         name: inputs.name!,
@@ -184,20 +182,24 @@ export default function CreateCollectionSection(props: CreateCollectionSectionPr
       let uploadResult: Awaited<ReturnType<typeof NFTStorageMetaplexor.storePreparedNFT>>;
 
       try {
-        const nftStorageClient = await NFTStorageMetaplexor.withSigner(web3Wallet.signMessage!, web3Wallet.publicKey!.toBytes(), {
+        const nftStorageClient = await NFTStorageMetaplexor.withSigner(wallet.signMessage!, wallet.publicKey!.toBytes(), {
           solanaCluster: settings.cluster,
           mintingAgent: "thagki9/candy-machine-toolkit",
         });
         uploadResult = await nftStorageClient.storePreparedNFT(metaplexNFT);
       } catch (err) {
         console.error("Fail to sign:", err);
-        setTaskSignAndUpload({ status: TaskStatus.Error, errorMessage: `${err}`, metadataURI: "" });
+        setTaskSignAndUpload({ status: TaskStatus.Error, errorMessage: `${err}` });
         return;
       }
       console.debug("Metadata Upload:", uploadResult);
 
-      setTaskSignAndUpload({ status: TaskStatus.Success, metadataURI: uploadResult.metadataGatewayURL });
-      setTaskSignForMintingTx({ status: TaskStatus.Loading, collectionNFTLink: "" });
+      setTaskSignAndUpload({
+        status: TaskStatus.Success,
+        metadataUri: uploadResult.metadataGatewayURL,
+        metadataIpfsUri: uploadResult.metadataURI,
+      });
+      setTaskSignForMintingTx({ status: TaskStatus.Loading });
 
       const [editionPDA, metadataPDA, userTokenAccountAddress] = await Promise.all([
         getEditionPDA(collectionTokenKeypair.publicKey),
@@ -205,7 +207,7 @@ export default function CreateCollectionSection(props: CreateCollectionSectionPr
         getAssociatedTokenAddress(collectionTokenKeypair.publicKey, userPubKey),
       ]);
 
-      const transaction = new Transaction().add(
+      let transaction = new Transaction().add(
         SystemProgram.createAccount({
           fromPubkey: userPubKey,
           newAccountPubkey: collectionTokenKeypair.publicKey,
@@ -255,21 +257,14 @@ export default function CreateCollectionSection(props: CreateCollectionSectionPr
         ),
       );
 
-      let txId: string;
-
       try {
         const recentBlockHash = await connection.getLatestBlockhash();
         transaction.recentBlockhash = recentBlockHash.blockhash;
         transaction.feePayer = userPubKey;
         transaction.partialSign(collectionTokenKeypair);
-        const signedTransaction = await wallet!.signTransaction(transaction);
-        txId = await connection.sendRawTransaction(signedTransaction.serialize(), { skipPreflight: true });
-      } catch (err) {
-        setTaskSignForMintingTx({
-          status: TaskStatus.Error,
-          collectionNFTLink: "",
-          errorMessage: `${err}`,
-        });
+        transaction = await wallet!.signTransaction!(transaction);
+      } catch (err: any) {
+        setTaskSignForMintingTx({ status: TaskStatus.Error, errorMessage: `${err}` });
         return;
       }
 
@@ -277,6 +272,16 @@ export default function CreateCollectionSection(props: CreateCollectionSectionPr
         status: TaskStatus.Success,
         collectionNFTLink: getBrowserLinkByAddress(collectionTokenKeypair.publicKey.toBase58(), settings.cluster),
       });
+      setTaskWaitingTx({ status: TaskStatus.Loading });
+
+      let txId: string;
+      try {
+        txId = await connection.sendRawTransaction(transaction.serialize());
+      } catch (err: any) {
+        setTaskWaitingTx({ status: TaskStatus.Error, errorMessage: err.message });
+        return;
+      }
+
       const txLink = getBrowserLinkByTxId(txId, settings.cluster);
       setTaskWaitingTx({ status: TaskStatus.Loading, txLink });
 
@@ -288,208 +293,187 @@ export default function CreateCollectionSection(props: CreateCollectionSectionPr
       }
 
       setTaskWaitingTx({ status: TaskStatus.Success, txLink });
-      setTaskFinishCreating({ status: TaskStatus.Finish });
+      setTaskFinish({ status: TaskStatus.Finish });
 
       onCreated(collectionTokenKeypair.publicKey);
     })().finally(() => {
-      setCreatingCollection(false);
+      setExecuting(false);
     });
   };
 
   return (
-    <div id={id}>
-      <section className="text-3xl pb-8">Step 1: Create Collection NFT [Optional if created]</section>
-      <article className="flex flex-row gap-12">
-        <article className="flex flex-col gap-4 w-96 flex-shrink-0">
-          <div className="form-control w-full">
-            <label className="label label-text">Collection Name</label>
+    <>
+      <article className="flex flex-col gap-4 w-96 flex-shrink-0">
+        <div className="form-control w-full">
+          <label className="label label-text">Collection Name</label>
+          <input
+            id="collection-name"
+            className="input input-bordered w-full max-w-md"
+            disabled={executing}
+            type="text"
+            placeholder="Please input the name of the collection"
+          />
+        </div>
+
+        <div className="form-control w-full flex flex-row gap-4">
+          <div className="flex-grow">
+            <label className="label label-text">Symbol</label>
             <input
-              id="collection-name"
+              id="collection-symbol"
               className="input input-bordered w-full max-w-md"
-              disabled={creatingCollection}
+              disabled={executing}
               type="text"
-              placeholder="Please input the name of the collection"
+              placeholder="Please input the symbol of the collection"
             />
-          </div>
 
-          <div className="form-control w-full flex flex-row gap-4">
-            <div className="flex-grow">
-              <label className="label label-text">Symbol</label>
+            <label className="label label-text">Royalty Ratio (%)</label>
+            <label className="input-group">
               <input
-                id="collection-symbol"
+                id="collection-fee"
                 className="input input-bordered w-full max-w-md"
-                disabled={creatingCollection}
-                type="text"
-                placeholder="Please input the symbol of the collection"
+                disabled={executing}
+                type="number"
+                max={100}
+                min={0}
+                placeholder="0 to 100"
+                defaultValue={5}
               />
-
-              <label className="label label-text">Royalty Ratio (%)</label>
-              <label className="input-group">
-                <input
-                  id="collection-fee"
-                  className="input input-bordered w-full max-w-md"
-                  disabled={creatingCollection}
-                  type="number"
-                  max={100}
-                  min={0}
-                  placeholder="0 to 100"
-                  defaultValue={5}
-                />
-                <span>%</span>
-              </label>
-            </div>
-            <div>
-              <label className="label label-text">Icon</label>
-              <div className="flex flex-row gap-2">
-                <div
-                  className={`border border-zinc-300 h-32 w-32 aspect-square flex justify-center items-center rounded-md 
-                        ${creatingCollection ? "" : " cursor-pointer"}`}
-                  onClick={creatingCollection ? undefined : selectLogo}
-                >
-                  {iconFile ? <img className="h-full w-full object-contain" src={iconFile!.dataURL} alt="icon" /> : <span>Upload Logo</span>}
-                </div>
+              <span>%</span>
+            </label>
+          </div>
+          <div>
+            <label className="label label-text">Icon</label>
+            <div className="flex flex-row gap-2">
+              <div
+                className={`border border-zinc-300 h-32 w-32 aspect-square flex justify-center items-center rounded-md ${executing ? "" : " cursor-pointer"}`}
+                onClick={executing ? undefined : selectLogo}
+              >
+                {iconFile ? <img className="h-full w-full object-contain" src={iconFile!.dataURL} alt="icon" /> : <span>Upload Logo</span>}
               </div>
             </div>
           </div>
+        </div>
 
-          <div className="form-control w-full">
-            <label className="label">
-              <span className="label-text">Description</span>
-            </label>
-            <textarea
-              id="collection-description"
-              disabled={creatingCollection}
-              className="textarea textarea-bordered leading-relaxed"
-              rows={3}
-              placeholder="Please input your description to the collection"
-            />
-          </div>
+        <div className="form-control w-full">
+          <label className="label">
+            <span className="label-text">Description</span>
+          </label>
+          <textarea
+            id="collection-description"
+            disabled={executing}
+            className="textarea textarea-bordered leading-relaxed"
+            rows={3}
+            placeholder="Please input your description to the collection"
+          />
+        </div>
 
-          <div className="form-control w-full">
-            <label className="label label-text">Creators</label>
+        <div className="form-control w-full">
+          <label className="label label-text">Creators</label>
 
-            <div className="flex flex-col gap-1 w-full">
-              <div className="flex flex-row gap-3 items-center">
+          <div className="flex flex-col gap-1 w-full">
+            <div className="flex flex-row gap-3 items-center">
+              <input
+                disabled={true}
+                className="block flex-grow input input-bordered input-sm w-full max-w-md"
+                type="text"
+                defaultValue={wallet?.publicKey?.toBase58() ?? ""}
+              />
+              <input
+                id="collection-default-share"
+                className="block w-3/12 input input-bordered input-sm w-full max-w-md appearance-none"
+                type="number"
+                disabled={executing}
+                max={100}
+                min={0}
+                placeholder="Shares"
+                defaultValue={100}
+              />
+              <button className="btn btn-circle btn-xs" disabled={executing} onClick={addCreator}>
+                <FontAwesomeIcon icon={faPlus} />
+              </button>
+            </div>
+
+            {creators.map((creator, idx) => (
+              <div key={idx} className="flex flex-row gap-3 items-center">
                 <input
-                  disabled={true}
                   className="block flex-grow input input-bordered input-sm w-full max-w-md"
+                  disabled={executing}
                   type="text"
-                  defaultValue={wallet?.publicKey.toBase58() ?? ""}
+                  onChange={(e) => onAddressChanged(idx, e.target.value)}
+                  placeholder={`Creator ${idx + 1} Address`}
                 />
                 <input
-                  id="collection-default-share"
                   className="block w-3/12 input input-bordered input-sm w-full max-w-md appearance-none"
+                  disabled={executing}
                   type="number"
-                  disabled={creatingCollection}
                   max={100}
                   min={0}
+                  onChange={(e) => onShareChanged(idx, e.target.value)}
                   placeholder="Shares"
-                  defaultValue={100}
+                  defaultValue={creator.share}
                 />
-                <button className="btn btn-circle btn-xs" disabled={creatingCollection} onClick={addCreator}>
-                  <FontAwesomeIcon icon={faPlus} />
+                <button className="btn btn-circle btn-xs btn-error" disabled={executing} onClick={() => removeCreator(idx)}>
+                  <FontAwesomeIcon icon={faXmark} color="white" />
                 </button>
               </div>
-
-              {creators.map((creator, idx) => (
-                <div key={idx} className="flex flex-row gap-3 items-center">
-                  <input
-                    className="block flex-grow input input-bordered input-sm w-full max-w-md"
-                    disabled={creatingCollection}
-                    type="text"
-                    onChange={(e) => onAddressChanged(idx, e.target.value)}
-                    placeholder={`Creator ${idx + 1} Address`}
-                  />
-                  <input
-                    className="block w-3/12 input input-bordered input-sm w-full max-w-md appearance-none"
-                    disabled={creatingCollection}
-                    type="number"
-                    max={100}
-                    min={0}
-                    onChange={(e) => onShareChanged(idx, e.target.value)}
-                    placeholder="Shares"
-                    defaultValue={creator.share}
-                  />
-                  <button className="btn btn-circle btn-xs btn-error" disabled={creatingCollection} onClick={() => removeCreator(idx)}>
-                    <FontAwesomeIcon icon={faXmark} color="white" />
-                  </button>
-                </div>
-              ))}
-            </div>
+            ))}
           </div>
+        </div>
 
-          <button
-            className={`btn ${creatingCollection ? "loading" : ""} mt-4 px-8 w-fit`}
-            disabled={creatingCollection || !wallet}
-            onClick={createCollectionToken}
-          >
-            {creatingCollection ? "Creating..." : "Create"}
-          </button>
-        </article>
-
-        {taskPackMetadata?.status && <div className="divider divider-horizontal" />}
-        {taskPackMetadata?.status && (
-          <aside hidden={!taskPackMetadata?.status} className="w-fit">
-            <ul className="tasks">
-              <li data-status={taskPackMetadata?.status} className="task">
-                <span>
-                  Pack collection NFT metadata
-                  <StatusIndicator task={taskPackMetadata} />
-                </span>
-              </li>
-
-              <li data-status={taskSignAndUpload?.status} className="task">
-                <div>
-                  <div>
-                    Sign and uploading collection metadata
-                    <StatusIndicator task={taskSignForMintingTx} />
-                  </div>
-                  <div>
-                    <a className="ml-2 underline" href={taskSignAndUpload?.metadataURI ?? ""} target="_blank" rel="noreferrer">
-                      Collection NFT
-                    </a>
-                  </div>
-                </div>
-              </li>
-
-              <li data-status={taskSignForMintingTx?.status} className="task">
-                <div>
-                  <span>
-                    Sign for minting of collection NFT
-                    <StatusIndicator task={taskSignForMintingTx} />
-                  </span>
-
-                  <a className="ml-2 underline" href={taskSignForMintingTx?.collectionNFTLink} target="_blank" rel="noreferrer">
-                    Collection NFT
-                  </a>
-                </div>
-              </li>
-
-              <li data-status={taskWaitingTx?.status} className="task">
-                <span>
-                  Waiting for transaction confirmation
-                  {taskWaitingTx?.txLink && (
-                    <>
-                      :
-                      <a className="ml-2 underline" href={taskWaitingTx.txLink} target="_blank" rel="noreferrer">
-                        Transaction
-                      </a>
-                    </>
-                  )}{" "}
-                  <StatusIndicator task={taskWaitingTx} />
-                </span>
-              </li>
-
-              <li data-status={taskFinishCreating?.status} className="task">
-                <span>
-                  Finish
-                  <StatusIndicator task={taskFinishCreating} />
-                </span>
-              </li>
-            </ul>
-          </aside>
-        )}
+        <button className={`btn ${executing ? "loading" : ""} mt-4 px-8 w-fit`} disabled={executing || !wallet} onClick={createCollectionToken}>
+          {executing ? "Creating..." : "Create"}
+        </button>
       </article>
-    </div>
+
+      {taskPackMetadata?.status && <div className="divider divider-horizontal" />}
+      {taskPackMetadata?.status && (
+        <ul className="tasks w-fit">
+          <li className="task" data-status={taskPackMetadata?.status}>
+            <div>Pack collection NFT metadata</div>
+            {taskPackMetadata.errorMessage && <div className="error-message">{taskPackMetadata.errorMessage}</div>}
+          </li>
+
+          <li className="task" data-status={taskSignAndUpload?.status}>
+            <div>Sign and uploading collection metadata</div>
+            {taskSignAndUpload?.errorMessage && <div className="error-message">{taskSignAndUpload.errorMessage}</div>}
+            {taskSignAndUpload?.metadataUri && (
+              <a className="block underline" href={taskSignAndUpload.metadataUri} target="_blank" rel="noreferrer">
+                Metadata
+              </a>
+            )}
+            {taskSignAndUpload?.metadataIpfsUri && (
+              <a className="block underline" href={taskSignAndUpload.metadataIpfsUri} target="_blank" rel="noreferrer">
+                Metadata (IPFS)
+              </a>
+            )}
+          </li>
+
+          <li className="task" data-status={taskSignForMintingTx?.status}>
+            <div>Sign for minting of collection NFT</div>
+            {taskSignForMintingTx?.errorMessage && <div className="error-message">{taskSignForMintingTx.errorMessage}</div>}
+            {taskSignForMintingTx?.collectionNFTLink && (
+              <a className="block underline" href={taskSignForMintingTx.collectionNFTLink} target="_blank" rel="noreferrer">
+                Collection NFT
+              </a>
+            )}
+          </li>
+
+          <li className="task" data-status={taskWaitingTx?.status}>
+            <div>Waiting for transaction confirmation</div>
+            {taskWaitingTx?.errorMessage && <div className="error-message">{taskWaitingTx.errorMessage}</div>}
+            {taskWaitingTx?.txLink && (
+              <a className="block underline" href={taskWaitingTx.txLink} target="_blank" rel="noreferrer">
+                Transaction
+              </a>
+            )}
+          </li>
+
+          <li className="task" data-status={taskFinish?.status}>
+            <div>Finish</div>
+            {taskFinish?.errorMessage && <div className="error-message">{taskFinish.errorMessage}</div>}
+          </li>
+        </ul>
+      )}
+    </>
   );
 }

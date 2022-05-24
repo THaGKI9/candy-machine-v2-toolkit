@@ -1,8 +1,16 @@
-import { Cluster, Commitment, Connection, SignatureStatus, TransactionSignature } from "@solana/web3.js";
+import { Cluster, Connection, PublicKey, PublicKeyInitData, TransactionSignature } from "@solana/web3.js";
 import { isString, sleep } from "./misc";
 
 export function shortenAddress(publicKey: string): string {
   return publicKey.substring(0, 4) + "..." + publicKey.substring(publicKey.length - 4);
+}
+
+export function isValidPublicKey(publicKeyData: PublicKeyInitData): boolean {
+  try {
+    return PublicKey.isOnCurve(publicKeyData);
+  } catch {
+    return false;
+  }
 }
 
 export function getBrowserLinkByAddress(address: string, cluster: Cluster): string {
